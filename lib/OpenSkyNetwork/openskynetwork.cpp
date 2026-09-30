@@ -5,6 +5,81 @@
 #include <vector>
 #include "../secrets.h"
 
+namespace
+{
+    constexpr float pi = 3.14159;
+    constexpr float earthRadius = 6378.137;
+
+    std::vector<float> getBoundingValues(const float latitude, const float longitude)
+    {
+        constexpr u_int radius = 20;
+        constexpr float degreesPerKMLat = 0.0089831117;
+        constexpr float latDelta = radius * degreesPerKMLat;
+
+        const float latRadians = latitude * pi / 180;
+
+        const float minLatitude = latitude - latDelta;
+        const float maxLatitude = latitude + latDelta;
+
+        const float degreesPerKmLon = 1 / (earthRadius * cos(latRadians) * pi / 180);
+        const float lonDelta = radius * degreesPerKmLon;
+
+        const float minLongitude = longitude - lonDelta;
+        const float maxLongitude = longitude + lonDelta;
+
+        return std::vector{minLatitude, minLongitude, maxLatitude, maxLongitude};
+    }
+
+    float calculateDistanceToSelf(const float selfLongitude, const float selfLatitude, const float planeLongitude,
+                                  const float planeLatitude, const float altitude)
+    {
+        // Using the Equirectangular approximation since the distance is usually small enough to ignore earths curvature
+        const auto phi1 = radians(selfLatitude);
+        const auto phi2 = radians(planeLatitude);
+        const auto lambda1 = radians(selfLongitude);
+        const auto lambda2 = radians(planeLongitude);
+        const auto x = (lambda1 - lambda2) * cos((phi1 + phi2) / 2);
+        const auto y = phi2 - phi1;
+
+        const auto distance = earthRadius * sqrt(pow(x, 2) + pow(y, 2));
+
+        // Altitude matters if the plane is in the air
+        if (altitude <= 10)
+        {
+            return static_cast<float>(distance);
+        }
+
+        const auto altitudeInKM = altitude / 1000;
+        const auto c = pow(distance, 2) + pow(altitudeInKM, 2);
+        return static_cast<float>(sqrt(c));
+    }
+
+
+    std::vector<openskynetwork::Plane> parsePlanes(const String& payload, const float latitude, const float longitude)
+    {
+        JsonDocument doc;
+        deserializeJson(doc, payload);
+
+        const JsonArray data = doc["states"];
+
+        if (data.isNull())
+        {
+            return {};
+        }
+
+        std::vector<openskynetwork::Plane> planes{};
+
+        for (const auto plane : data)
+        {
+            planes.push_back(openskynetwork::Plane(plane[1], plane[2], plane[13], plane[7], calculateDistanceToSelf(
+                                                       longitude, latitude, plane[5], plane[6], plane[13]
+                                                   ), plane[9], plane[17]));
+        }
+
+        return planes;
+    }
+}
+
 namespace openskynetwork
 {
     String getBearerAuthToken(WiFiClient& client, HTTPClient& http)
@@ -55,45 +130,6 @@ namespace openskynetwork
 
         http.end();
 
-        return parsePlanes(payload);
-    }
-
-    std::vector<float> getBoundingValues(const float& latitude, const float& longitude)
-    {
-        constexpr u_int radius = 20;
-        constexpr float pi = 3.14159;
-        constexpr float earthRadius = 6378.137;
-        constexpr float degreesPerKMLat = 0.0089831117;
-        constexpr float latDelta = radius * degreesPerKMLat;
-
-        const float latRadians = latitude * pi / 180;
-
-        const float minLatitude = latitude - latDelta;
-        const float maxLatitude = latitude + latDelta;
-
-        const float degreesPerKmLon = 1 / (earthRadius * cos(latRadians) * pi / 180);
-        const float lonDelta = radius * degreesPerKmLon;
-
-        const float minLongitude = longitude - lonDelta;
-        const float maxLongitude = longitude + lonDelta;
-
-        return std::vector{minLatitude, minLongitude, maxLatitude, maxLongitude};
-    }
-
-
-    std::vector<Plane> parsePlanes(const String& payload)
-    {
-        JsonDocument doc;
-        deserializeJson(doc, payload);
-
-        const auto states = doc["states"];
-
-        if (states.isNull())
-        {
-            return {};
-        }
-
-        const auto firstObj = states[0];
-        return {Plane(firstObj[1], firstObj[2], firstObj[13], firstObj[7], 1.0, firstObj[9])};
+        return parsePlanes(payload, latitude, longitude);
     }
 }

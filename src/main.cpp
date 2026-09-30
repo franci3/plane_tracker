@@ -24,6 +24,7 @@ static void connectWifi();
 static void showCurrentPlanes();
 static void readButtonState();
 static void updatePlanes();
+static void displayPlanes(const openskynetwork::Plane& plane, u_int index, size_t count);
 static String token{};
 static std::vector<openskynetwork::Plane> planes;
 static bool buttonClicked{};
@@ -68,8 +69,25 @@ void showCurrentPlanes()
         tft.write("No planes in area");
         return;
     }
-    const auto& plane = planes[0];
-    tft.print(plane.callSign);
+    u_int index{};
+    for (const auto& plane : planes)
+    {
+        displayPlanes(plane, index++, planes.size());
+        delay(kDelayMS * 3);
+        clearDisplay();
+    }
+}
+
+void displayPlanes(const openskynetwork::Plane& plane, const u_int index, const size_t count)
+{
+    tft.setCursor(0, 30);
+    tft.println(String(index + 1) + "/" + count);
+    tft.println(plane.callSign);
+    tft.println(plane.originCountry);
+    tft.println(String(plane.distanceToSelf) + " km");
+    tft.println(String(plane.geoAltitude) + " m ue. NN");
+    tft.println(String(plane.velocity) + " m/s");
+    tft.println("Category " + String(plane.category));
 }
 
 void connectWifi()
@@ -82,6 +100,7 @@ void connectWifi()
     tft.println(result);
 }
 
+// Just for debugging right now
 void readButtonState()
 {
     if (const int rawValue = analogRead(A0); rawValue > 512 && !buttonClicked)

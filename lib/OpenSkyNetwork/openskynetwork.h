@@ -15,12 +15,11 @@ namespace openskynetwork
         float baroAltitude;
         float distanceToSelf;
         float velocity;
+        u_int category;
     };
 
     String getBearerAuthToken(WiFiClient& client, HTTPClient& http);
     std::vector<Plane> getCurrentPlanes(float latitude, float longitude,
                                         const String& bearerToken, WiFiClient& client,
                                         HTTPClient& http);
-    std::vector<float> getBoundingValues(const float& latitude, const float& longitude);
-    std::vector<Plane> parsePlanes(const String& payload);
 }
