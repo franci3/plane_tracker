@@ -12,8 +12,8 @@
 constexpr u_int8_t TFT_DC{D1};
 constexpr u_int8_t TFT_RST{D2};
 constexpr u_int8_t TFT_CS{D8};
-constexpr u_int8_t BUTTON_D6{D6};
 constexpr u_int kDelayMS{1000};
+constexpr u_int kUpdateIntervalMS{600000};
 constexpr float kLongitude{LONGITUDE};
 constexpr float kLatitude{LATITUDE};
 static auto tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
@@ -22,12 +22,11 @@ static HTTPClient http;
 static void clearDisplay();
 static void connectWifi();
 static void showCurrentPlanes();
-static void readButtonState();
 static void updatePlanes();
 static void displayPlanes(const openskynetwork::Plane& plane, u_int index, size_t count);
 static String token{};
 static std::vector<openskynetwork::Plane> planes;
-static bool buttonClicked{};
+static unsigned long elapsedTime;
 
 void setup()
 {
@@ -46,15 +45,23 @@ void setup()
     tft.setTextColor(ST77XX_BLUE);
 
     updatePlanes();
+    elapsedTime = millis();
 }
 
 void loop()
 {
-    readButtonState();
-    tft.setCursor(0, 130);
-    clearDisplay();
-    showCurrentPlanes();
-    delay(kDelayMS);
+    if (millis() - elapsedTime < kUpdateIntervalMS)
+    {
+        tft.setCursor(0, 130);
+        clearDisplay();
+        showCurrentPlanes();
+        delay(kDelayMS);
+    }
+    else
+    {
+        updatePlanes();
+        elapsedTime = millis();
+    }
 }
 
 void clearDisplay()
@@ -98,21 +105,6 @@ void connectWifi()
     const char* password = PASSWORD;
     const auto result = wifi_connection::connnectWifi(ssid, password);
     tft.println(result);
-}
-
-// Just for debugging right now
-void readButtonState()
-{
-    if (const int rawValue = analogRead(A0); rawValue > 512 && !buttonClicked)
-    {
-        buttonClicked = true;
-        updatePlanes();
-    }
-    else
-    {
-        buttonClicked = false;
-    }
-    Serial.println(buttonClicked);
 }
 
 void updatePlanes()
